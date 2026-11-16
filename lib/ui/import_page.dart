@@ -63,14 +63,13 @@ Future<void> openImport(BuildContext context, {bool scanFolder = false}) async {
     bytes = await x.readAsBytes();
     name = 'doklad.jpg';
   } else {
-    final res = await FilePicker.platform.pickFiles(
+    final res = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['jpg', 'jpeg', 'png', 'heic', 'webp', 'pdf'],
-      withData: true,
     );
-    final f = res?.files.firstOrNull;
+    final f = res.firstOrNull;
     if (f == null) return;
-    bytes = f.bytes ?? (f.path != null ? await File(f.path!).readAsBytes() : null);
+    bytes = await f.readAsBytes();
     name = f.name;
   }
   if (bytes == null || !context.mounted) return;
