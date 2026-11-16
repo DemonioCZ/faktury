@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
@@ -215,6 +216,27 @@ class AppState extends ChangeNotifier {
       categories = [...categories, n];
       _saveCache();
     });
+  }
+
+  // ---- skeny (krátkodobá cache v paměti) ----
+  final Map<String, Future<Uint8List>> _scans = {};
+
+  Future<Uint8List> scanBytes(String fileId) {
+    final cached = _scans.remove(fileId);
+    if (cached != null) {
+      _scans[fileId] = cached; // posunout na konec (nejnověji použitý)
+      return cached;
+    }
+    final f = google.download(fileId);
+    _scans[fileId] = f;
+    f.catchError((_) {
+      _scans.remove(fileId);
+      return Uint8List(0);
+    });
+    while (_scans.length > 15) {
+      _scans.remove(_scans.keys.first);
+    }
+    return f;
   }
 
   // ---- nové doklady ----

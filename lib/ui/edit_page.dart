@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
-
 import '../app_state.dart';
 import '../models.dart';
+import 'scan_view.dart';
 import 'widgets.dart';
 
 Future<bool?> openEditor(BuildContext context, Receipt r, {String title = 'Upravit doklad'}) {
@@ -127,8 +126,7 @@ class _EditPageState extends State<EditPage> {
             Align(
               alignment: Alignment.centerLeft,
               child: OutlinedButton.icon(
-                onPressed: () =>
-                    launchUrl(Uri.parse(r.scanLink), mode: LaunchMode.externalApplication),
+                onPressed: () => openScanViewer(context, r),
                 icon: const Icon(Icons.visibility_outlined),
                 label: const Text('Zobrazit sken'),
               ),

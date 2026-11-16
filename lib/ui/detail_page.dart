@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
-
 import '../app_state.dart';
 import '../models.dart';
 import 'edit_page.dart';
+import 'scan_view.dart';
 import 'widgets.dart';
 
 class ReceiptDetail extends StatelessWidget {
@@ -12,16 +11,6 @@ class ReceiptDetail extends StatelessWidget {
   final Receipt receipt;
   final bool wide;
   final VoidCallback? onDeleted;
-
-  Future<void> _openScan(BuildContext context) async {
-    final link = receipt.scanLink;
-    if (link.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('K dokladu není připojený sken.')));
-      return;
-    }
-    await launchUrl(Uri.parse(link), mode: LaunchMode.externalApplication);
-  }
 
   Future<void> _delete(BuildContext context) async {
     final ok = await showDialog<bool>(
@@ -54,29 +43,10 @@ class ReceiptDetail extends StatelessWidget {
     final state = r.stateAt(t);
     final colors = StatusColors.of(context, state);
 
-    final scanCard = InkWell(
-      onTap: () => _openScan(context),
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        height: wide ? 300 : 190,
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Stack(alignment: Alignment.center, children: [
-          Icon(Icons.description_outlined, size: 72, color: cs.onSurfaceVariant.withValues(alpha: .5)),
-          Positioned(
-            bottom: 16,
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(
-                  backgroundColor: cs.inverseSurface, foregroundColor: cs.onInverseSurface),
-              onPressed: () => _openScan(context),
-              icon: const Icon(Icons.visibility_outlined),
-              label: const Text('Zobrazit sken'),
-            ),
-          ),
-        ]),
-      ),
+    final scanCard = ScanPreview(
+      key: ValueKey('scan-${r.fileId}'),
+      receipt: r,
+      height: wide ? 420 : 220,
     );
 
     final warrantyCard = Container(
