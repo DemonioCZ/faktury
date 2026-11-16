@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -12,6 +14,35 @@ class GeminiService {
   static const defaultModel = 'gemini-3.8-flash';
   final String apiKey;
   final String model;
+
+  /// Čekání před dalšími pokusy, když je Gemini přetížený nebo spadne spojení.
+  static const retryDelays = [
+    Duration(seconds: 2),
+    Duration(seconds: 5),
+    Duration(seconds: 12),
+  ];
+
+  /// Opraví běžné překlepy v ručně zadaném názvu modelu
+  /// (mezery, velká písmena, prefix "models/", zdvojené nebo přebytečné tečky),
+  /// např. "gemini-3.8.-flash" -> "gemini-3.8-flash".
+  static String normalizeModel(String raw) {
+    var m = raw.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '-');
+    if (m.startsWith('models/')) m = m.substring(7);
+    return m
+        .replaceAll(RegExp(r'\.{2,}'), '.')
+        .replaceAll(RegExp(r'-{2,}'), '-')
+        .replaceAll('.-', '-')
+        .replaceAll('-.', '-')
+        .replaceAll(RegExp(r'^[.\-]+|[.\-]+$'), '');
+  }
+
+  /// Vypadá název jako platný model Gemini?
+  static bool isValidModel(String m) =>
+      RegExp(r'^gemini-[a-z0-9]+(\.[a-z0-9]+)*(-[a-z0-9]+(\.[a-z0-9]+)*)*$')
+          .hasMatch(m);
+
+  static bool _retryable(int code) =>
+      code == 429 || code == 500 || code == 502 || code == 503 || code == 504;
 
   Future<Receipt> extract({
     required Uint8List bytes,
@@ -62,19 +93,50 @@ ${fileName.isNotEmpty ? 'Název souboru (může napovědět): $fileName' : ''}
         },
       },
     };
-    final uri = Uri.parse(
-        'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent');
-    final res = await http.post(
-      uri,
-      headers: {'Content-Type': 'application/json', 'x-goog-api-key': apiKey},
-      body: jsonEncode(body),
-    );
+    var useModel = normalizeModel(model);
+    if (!isValidModel(useModel)) useModel = defaultModel;
+    final payload = jsonEncode(body);
+    final attempts = retryDelays.length + 1;
+
+    http.Response? res;
+    Object? lastError;
+    for (var i = 0; i < attempts; i++) {
+      if (i > 0) await Future.delayed(retryDelays[i - 1]);
+      try {
+        res = await _post(useModel, payload);
+        // Neznámý model (ukončený nebo překlep): zkusit výchozí.
+        if (res.statusCode == 404 && useModel != defaultModel) {
+          useModel = defaultModel;
+          res = await _post(useModel, payload);
+        }
+        if (!_retryable(res.statusCode)) break;
+      } on SocketException catch (e) {
+        lastError = e;
+        res = null;
+        continue;
+      } on http.ClientException catch (e) {
+        lastError = e;
+        res = null;
+        continue;
+      } on TimeoutException catch (e) {
+        lastError = e;
+        res = null;
+      }
+    }
+    if (res == null) {
+      throw Exception('Nepodařilo se spojit s Gemini ani na $attempts pokusů. '
+          'Zkontrolujte připojení k internetu a zkuste to znovu. ($lastError)');
+    }
     if (res.statusCode != 200) {
       String msg = res.body;
       try {
         msg = (jsonDecode(res.body)['error']?['message'] as String?) ?? msg;
       } catch (_) {}
-      throw Exception('Gemini (${res.statusCode}): $msg');
+      if (_retryable(res.statusCode)) {
+        throw Exception('Gemini je teď přetížený (${res.statusCode}), nepomohlo ani '
+            '$attempts pokusů. Zkuste to za pár minut znovu. ($msg)');
+      }
+      throw Exception('Gemini (${res.statusCode}, model $useModel): $msg');
     }
     final data = jsonDecode(utf8.decode(res.bodyBytes));
     final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] as String?;
@@ -92,6 +154,15 @@ ${fileName.isNotEmpty ? 'Název souboru (může napovědět): $fileName' : ''}
       filledBy: 'AI',
     );
   }
+
+  Future<http.Response> _post(String useModel, String payload) => http
+      .post(
+        Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/'
+            '$useModel:generateContent'),
+        headers: {'Content-Type': 'application/json', 'x-goog-api-key': apiKey},
+        body: payload,
+      )
+      .timeout(const Duration(seconds: 90));
 }
 
 String mimeFromName(String name) {

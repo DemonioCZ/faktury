@@ -129,8 +129,14 @@ class _SettingsPageState extends State<SettingsPage> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           child: TextField(
             controller: _model,
-            decoration: InputDecoration(labelText: 'Model', helperText: 'Výchozí ${GeminiService.defaultModel}. Když Google model ukončí, napište sem nový.'),
-            onChanged: (v) => st.settings.geminiModel = v,
+            decoration: InputDecoration(
+              labelText: 'Model',
+              helperText: 'Používá se: ${st.settings.geminiModel}'
+                  '${st.settings.geminiModel == GeminiService.defaultModel ? ' (výchozí)' : ''}. '
+                  'Když Google model ukončí, napište sem nový.',
+              helperMaxLines: 3,
+            ),
+            onChanged: (v) => setState(() => st.settings.geminiModel = v),
           ),
         ),
         ListTile(

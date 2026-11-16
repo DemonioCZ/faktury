@@ -24,13 +24,15 @@ class Settings {
   set geminiKey(String v) => _p.setString('geminiKey', v.trim());
 
   String get geminiModel {
-    final m = _p.getString('geminiModel');
+    final m = GeminiService.normalizeModel(_p.getString('geminiModel') ?? '');
     // Starý výchozí model Google ukončil, uložená hodnota se nahradí novým výchozím.
-    if (m == null || m.isEmpty || m == 'gemini-2.5-flash') return GeminiService.defaultModel;
+    // Neplatný název (překlep, který nejde opravit) se také nahradí výchozím.
+    if (m.isEmpty || m == 'gemini-2.5-flash' || !GeminiService.isValidModel(m)) {
+      return GeminiService.defaultModel;
+    }
     return m;
   }
-  set geminiModel(String v) =>
-      _p.setString('geminiModel', v.trim().isEmpty ? GeminiService.defaultModel : v.trim());
+  set geminiModel(String v) => _p.setString('geminiModel', v.trim());
 
   int get defaultWarranty => _p.getInt('defaultWarranty') ?? 24;
   set defaultWarranty(int v) => _p.setInt('defaultWarranty', v);
