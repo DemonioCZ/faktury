@@ -1,0 +1,35 @@
+name: faktury
+description: Účtenky a faktury – přehled dokladů a hlídání záruky.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  provider: ^6.1.2
+  google_sign_in: ^6.2.2
+  extension_google_sign_in_as_googleapis_auth: ^2.0.12
+  googleapis: ^13.2.0
+  googleapis_auth: ^1.6.0
+  http: ^1.2.2
+  intl: any
+  shared_preferences: ^2.3.2
+  path_provider: ^2.1.4
+  package_info_plus: ^8.0.2
+  url_launcher: ^6.3.0
+  image_picker: ^1.1.2
+  file_picker: ^8.1.2
+  open_filex: ^4.5.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

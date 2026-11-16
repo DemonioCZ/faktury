@@ -1,0 +1,95 @@
+# Sestaví APK (Android) a DMG (macOS) a vydá je jako GitHub Release.
+# Spouští se tagem "v*" (např. v1.0.1) nebo ručně z karty Actions.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Podpisový klíč
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > android/app/release.p12
+            cat > android/key.properties <<EOF
+          storeFile=release.p12
+          storeType=pkcs12
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=faktury
+          keyPassword=$KEYSTORE_PASSWORD
+          EOF
+          else
+            echo "::warning::Chybí ANDROID_KEYSTORE_BASE64, APK bude podepsané debug klíčem."
+          fi
+      - run: flutter pub get
+      - run: flutter test
+      - run: flutter build apk --release
+      - name: Přejmenovat
+        run: |
+          VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk "dist/Faktury-$VER.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/*.apk
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: >
+          flutter build macos --release
+          --dart-define=GOOGLE_DESKTOP_CLIENT_ID=${{ secrets.GOOGLE_DESKTOP_CLIENT_ID }}
+          --dart-define=GOOGLE_DESKTOP_CLIENT_SECRET=${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
+      - name: DMG
+        run: |
+          VER=$(grep '^version:' pubspec.yaml | sed 's/version: //; s/+.*//')
+          APP=build/macos/Build/Products/Release/Faktury.app
+          codesign --force --deep --sign - "$APP"
+          mkdir -p dmg dist
+          cp -R "$APP" dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "Faktury" -srcfolder dmg -ov -format UDZO "dist/Faktury-$VER.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/*.dmg
+
+  release:
+    needs: [android, macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
