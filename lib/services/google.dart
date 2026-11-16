@@ -213,11 +213,21 @@ class GoogleService {
     required String name,
     required Uint8List bytes,
     required String mimeType,
+    void Function(double progress)? onProgress,
   }) async {
+    // Data po kouscích, aby šlo ukazovat průběh nahrávání.
+    Stream<List<int>> chunks() async* {
+      const size = 64 * 1024;
+      for (var i = 0; i < bytes.length; i += size) {
+        final end = i + size < bytes.length ? i + size : bytes.length;
+        yield bytes.sublist(i, end);
+        onProgress?.call(end / bytes.length);
+      }
+    }
+
     final f = await _drive.files.create(
       drive.File(name: name, parents: [folderId]),
-      uploadMedia:
-          drive.Media(Stream.value(bytes), bytes.length, contentType: mimeType),
+      uploadMedia: drive.Media(chunks(), bytes.length, contentType: mimeType),
       $fields: 'id',
     );
     return f.id!;

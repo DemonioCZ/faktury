@@ -7,6 +7,52 @@ import 'package:http/http.dart' as http;
 
 import '../models.dart';
 
+/// Stav dlouhé operace pro zobrazení v UI.
+class TaskProgress {
+  const TaskProgress(this.step, this.steps, this.title, {this.detail, this.value});
+  final int step;
+  final int steps;
+  final String title;
+  final String? detail;
+
+  /// 0..1, nebo null, když průběh nejde změřit (čekání na odpověď Gemini).
+  final double? value;
+}
+
+/// Umožní uživateli zrušit probíhající zpracování.
+class CancelToken {
+  final _c = Completer<void>();
+  bool get isCancelled => _c.isCompleted;
+  Future<void> get whenCancelled => _c.future;
+  void cancel() {
+    if (!_c.isCompleted) _c.complete();
+  }
+
+  void check() {
+    if (isCancelled) throw const CancelledException();
+  }
+}
+
+class CancelledException implements Exception {
+  const CancelledException();
+  @override
+  String toString() => 'Zpracování bylo zrušeno.';
+}
+
+/// Gemini je přetížený i po všech pokusech, UI nabídne jiný model.
+class GeminiOverloadedException implements Exception {
+  GeminiOverloadedException(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
+class GeminiModel {
+  const GeminiModel(this.name, this.displayName);
+  final String name;
+  final String displayName;
+}
+
 /// Vytěžení údajů z fotky nebo PDF dokladu pomocí Gemini API.
 class GeminiService {
   GeminiService(this.apiKey, {this.model = defaultModel});
@@ -49,6 +95,8 @@ class GeminiService {
     required String mimeType,
     required List<String> categories,
     String fileName = '',
+    void Function(String status)? onStatus,
+    CancelToken? cancel,
   }) async {
     final prompt = '''
 Jsi asistent pro evidenci nákupních dokladů (faktur, účtenek, dodacích listů) v češtině.
@@ -100,27 +148,45 @@ ${fileName.isNotEmpty ? 'Název souboru (může napovědět): $fileName' : ''}
 
     http.Response? res;
     Object? lastError;
+    String problem = '';
     for (var i = 0; i < attempts; i++) {
-      if (i > 0) await Future.delayed(retryDelays[i - 1]);
+      if (i > 0) {
+        // Odpočet do dalšího pokusu, po sekundách, aby šlo zrušit a bylo vidět, co se děje.
+        for (var s = retryDelays[i - 1].inSeconds; s > 0; s--) {
+          cancel?.check();
+          onStatus?.call('$problem Další pokus za $s s (pokus ${i + 1} ze $attempts).');
+          await Future.delayed(const Duration(seconds: 1));
+        }
+      }
+      cancel?.check();
+      onStatus?.call('Čekám na odpověď modelu $useModel'
+          '${i > 0 ? ' (pokus ${i + 1} ze $attempts)' : ''}…');
       try {
-        res = await _post(useModel, payload);
+        res = await _send('models/$useModel:generateContent', payload, cancel);
         // Neznámý model (ukončený nebo překlep): zkusit výchozí.
         if (res.statusCode == 404 && useModel != defaultModel) {
           useModel = defaultModel;
-          res = await _post(useModel, payload);
+          onStatus?.call('Model nenalezen, zkouším výchozí $useModel…');
+          res = await _send('models/$useModel:generateContent', payload, cancel);
         }
         if (!_retryable(res.statusCode)) break;
-      } on SocketException catch (e) {
-        lastError = e;
-        res = null;
-        continue;
+        problem = res.statusCode == 429
+            ? 'Vyčerpán limit dotazů (429).'
+            : 'Gemini je přetížený (${res.statusCode}).';
       } on http.ClientException catch (e) {
+        cancel?.check();
         lastError = e;
         res = null;
-        continue;
+        problem = 'Spojení se přerušilo.';
+      } on SocketException catch (e) {
+        cancel?.check();
+        lastError = e;
+        res = null;
+        problem = 'Spojení se přerušilo.';
       } on TimeoutException catch (e) {
         lastError = e;
         res = null;
+        problem = 'Gemini neodpověděl do 90 s.';
       }
     }
     if (res == null) {
@@ -128,13 +194,11 @@ ${fileName.isNotEmpty ? 'Název souboru (může napovědět): $fileName' : ''}
           'Zkontrolujte připojení k internetu a zkuste to znovu. ($lastError)');
     }
     if (res.statusCode != 200) {
-      String msg = res.body;
-      try {
-        msg = (jsonDecode(res.body)['error']?['message'] as String?) ?? msg;
-      } catch (_) {}
+      final msg = _errorMessage(res);
       if (_retryable(res.statusCode)) {
-        throw Exception('Gemini je teď přetížený (${res.statusCode}), nepomohlo ani '
-            '$attempts pokusů. Zkuste to za pár minut znovu. ($msg)');
+        throw GeminiOverloadedException('Model $useModel je teď přetížený (${res.statusCode}), '
+            'nepomohlo ani $attempts pokusů. Zkuste to za pár minut znovu, '
+            'nebo vyberte jiný model. ($msg)');
       }
       throw Exception('Gemini (${res.statusCode}, model $useModel): $msg');
     }
@@ -155,14 +219,85 @@ ${fileName.isNotEmpty ? 'Název souboru (může napovědět): $fileName' : ''}
     );
   }
 
-  Future<http.Response> _post(String useModel, String payload) => http
-      .post(
-        Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/'
-            '$useModel:generateContent'),
-        headers: {'Content-Type': 'application/json', 'x-goog-api-key': apiKey},
-        body: payload,
-      )
-      .timeout(const Duration(seconds: 90));
+  /// Modely dostupné pro tento klíč, které umí generateContent
+  /// (bez specializovaných modelů na řeč, obrázky, embeddingy apod.).
+  Future<List<GeminiModel>> listModels() async {
+    final res = await _send('models?pageSize=1000', null, null,
+        timeout: const Duration(seconds: 30));
+    if (res.statusCode != 200) {
+      throw Exception('Seznam modelů se nepodařilo načíst (${res.statusCode}): ${_errorMessage(res)}');
+    }
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    const skip = ['embedding', 'tts', 'image', 'live', 'audio', 'aqa', 'robotics', 'computer-use'];
+    final out = <GeminiModel>[];
+    for (final m in (data['models'] as List? ?? [])) {
+      final name = (m['name'] as String? ?? '').replaceFirst('models/', '');
+      final methods = (m['supportedGenerationMethods'] as List?)?.cast<String>() ?? const [];
+      if (!name.startsWith('gemini-') || !methods.contains('generateContent')) continue;
+      if (skip.any(name.contains)) continue;
+      out.add(GeminiModel(name, (m['displayName'] as String?) ?? name));
+    }
+    // Novější verze nahoru, flash modely před pro.
+    double ver(String n) => double.tryParse(RegExp(r'gemini-(\d+(\.\d+)?)').firstMatch(n)?.group(1) ?? '') ?? 0;
+    out.sort((a, b) {
+      final v = ver(b.name).compareTo(ver(a.name));
+      if (v != 0) return v;
+      final fa = a.name.contains('flash') ? 0 : 1, fb = b.name.contains('flash') ? 0 : 1;
+      if (fa != fb) return fa - fb;
+      return a.name.compareTo(b.name);
+    });
+    return out;
+  }
+
+  /// Krátký zkušební dotaz. Vrátí dobu odpovědi, nebo vyhodí výjimku s důvodem.
+  Future<Duration> testModel(String name) async {
+    final sw = Stopwatch()..start();
+    final res = await _send(
+      'models/$name:generateContent',
+      jsonEncode({
+        'contents': [
+          {
+            'parts': [
+              {'text': 'Odpověz jen slovem OK.'}
+            ]
+          }
+        ]
+      }),
+      null,
+      timeout: const Duration(seconds: 30),
+    );
+    if (res.statusCode != 200) throw Exception('${res.statusCode}: ${_errorMessage(res)}');
+    return sw.elapsed;
+  }
+
+  static String _errorMessage(http.Response res) {
+    try {
+      return (jsonDecode(res.body)['error']?['message'] as String?) ?? res.body;
+    } catch (_) {
+      return res.body;
+    }
+  }
+
+  Future<http.Response> _send(String path, String? payload, CancelToken? cancel,
+      {Duration timeout = const Duration(seconds: 90)}) async {
+    final req = http.AbortableRequest(
+      payload == null ? 'GET' : 'POST',
+      Uri.parse('https://generativelanguage.googleapis.com/v1beta/$path'),
+      abortTrigger: cancel?.whenCancelled,
+    );
+    req.headers['x-goog-api-key'] = apiKey;
+    if (payload != null) {
+      req.headers['Content-Type'] = 'application/json';
+      req.body = payload;
+    }
+    final client = http.Client();
+    try {
+      final streamed = await client.send(req).timeout(timeout);
+      return await http.Response.fromStream(streamed).timeout(timeout);
+    } finally {
+      client.close();
+    }
+  }
 }
 
 String mimeFromName(String name) {

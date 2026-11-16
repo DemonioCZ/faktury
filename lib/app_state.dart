@@ -250,20 +250,32 @@ class AppState extends ChangeNotifier {
     return all.where((f) => !known.contains(f.id)).toList();
   }
 
-  GeminiService _gemini() {
+  GeminiService gemini() {
     if (!hasGemini) {
       throw Exception('Chybí Gemini API klíč. Doplňte ho v Nastavení.');
     }
     return GeminiService(settings.geminiKey, model: settings.geminiModel);
   }
 
-  Future<Receipt> extractDriveFile(DriveFile f) async {
+  void setGeminiModel(String m) {
+    settings.geminiModel = m;
+    notifyListeners();
+  }
+
+  Future<Receipt> extractDriveFile(DriveFile f,
+      {void Function(TaskProgress)? onProgress, CancelToken? cancel}) async {
+    onProgress?.call(const TaskProgress(1, 2, 'Stahuji sken z Disku'));
     final bytes = await google.download(f.id);
-    final r = await _gemini().extract(
+    cancel?.check();
+    final model = settings.geminiModel;
+    onProgress?.call(TaskProgress(2, 2, 'Čtu údaje pomocí Gemini ($model)'));
+    final r = await gemini().extract(
       bytes: bytes,
       mimeType: f.mimeType,
       categories: categories,
       fileName: f.name,
+      cancel: cancel,
+      onStatus: (s) => onProgress?.call(TaskProgress(2, 2, 'Čtu údaje pomocí Gemini ($model)', detail: s)),
     );
     r.fileId = f.id;
     r.folder = f.folderName;
@@ -271,21 +283,36 @@ class AppState extends ChangeNotifier {
     return r;
   }
 
-  /// Nahraje vyfocený/vybraný doklad na Disk a vytěží z něj údaje.
-  Future<Receipt> uploadAndExtract(Uint8List bytes, String fileName) async {
+  /// Vytěží údaje z vyfoceného/vybraného dokladu a pak ho nahraje na Disk.
+  /// Na Disk se nahrává až po úspěšném přečtení, takže chyba Gemini nezpůsobí duplicitu.
+  Future<Receipt> uploadAndExtract(Uint8List bytes, String fileName,
+      {void Function(TaskProgress)? onProgress, CancelToken? cancel}) async {
     final mime = mimeFromName(fileName);
-    final r = await _gemini().extract(
+    final model = settings.geminiModel;
+    onProgress?.call(TaskProgress(1, 2, 'Čtu údaje pomocí Gemini ($model)'));
+    final r = await gemini().extract(
       bytes: bytes,
       mimeType: mime,
       categories: categories,
       fileName: '',
+      cancel: cancel,
+      onStatus: (s) => onProgress?.call(TaskProgress(1, 2, 'Čtu údaje pomocí Gemini ($model)', detail: s)),
     );
+    cancel?.check();
     final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : 'jpg';
     final y = (r.date ?? today).year;
-    final safe = r.product.replaceAll(RegExp(r'[\\/:*?"<>|]'), ' ').trim();
+    final safe = r.product.replaceAll(RegExp(r'[\/:*?"<>|]'), ' ').trim();
     final name = '$y - ${safe.isEmpty ? 'doklad' : safe}.$ext';
+    final kb = (bytes.length / 1024).round();
+    onProgress?.call(TaskProgress(2, 2, 'Nahrávám sken na Disk', detail: '$kb kB', value: 0));
     final id = await google.upload(
-        folderId: settings.folderId, name: name, bytes: bytes, mimeType: mime);
+      folderId: settings.folderId,
+      name: name,
+      bytes: bytes,
+      mimeType: mime,
+      onProgress: (p) => onProgress?.call(TaskProgress(2, 2, 'Nahrávám sken na Disk',
+          detail: '${(p * kb).round()} z $kb kB', value: p)),
+    );
     r.fileId = id;
     r.folder = settings.folderName;
     r.scanUrl = 'https://drive.google.com/file/d/$id/view';

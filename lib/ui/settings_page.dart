@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../app_state.dart';
 import '../services/gemini.dart';
 import '../services/updater.dart';
+import 'model_picker.dart';
 import 'setup_pages.dart';
 import 'widgets.dart';
 
@@ -138,6 +139,21 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             onChanged: (v) => setState(() => st.settings.geminiModel = v),
           ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.list_alt_outlined),
+          title: const Text('Vybrat model ze seznamu'),
+          subtitle: const Text('Načte dostupné modely a umožní je vyzkoušet'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () async {
+            if (!st.hasGemini) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Nejdřív vložte Gemini API klíč.')));
+              return;
+            }
+            final m = await pickGeminiModel(context);
+            if (m != null && mounted) setState(() => _model.text = m);
+          },
         ),
         ListTile(
           leading: const Icon(Icons.key_outlined),
