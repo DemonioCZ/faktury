@@ -7,10 +7,12 @@ import 'scan_view.dart';
 import 'widgets.dart';
 
 class ReceiptDetail extends StatelessWidget {
-  const ReceiptDetail({super.key, required this.receipt, this.wide = false, this.onDeleted});
+  const ReceiptDetail(
+      {super.key, required this.receipt, this.wide = false, this.onDeleted, this.onSideBySide});
   final Receipt receipt;
   final bool wide;
   final VoidCallback? onDeleted;
+  final VoidCallback? onSideBySide;
 
   Future<void> _delete(BuildContext context) async {
     final ok = await showDialog<bool>(
@@ -47,6 +49,7 @@ class ReceiptDetail extends StatelessWidget {
       key: ValueKey('scan-${r.fileId}'),
       receipt: r,
       height: wide ? 420 : 220,
+      onSideBySide: onSideBySide,
     );
 
     final warrantyCard = Container(

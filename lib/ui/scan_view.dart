@@ -13,9 +13,12 @@ bool isPdfBytes(Uint8List b) =>
 
 /// Náhled skenu v detailu dokladu (první strana PDF nebo fotka).
 class ScanPreview extends StatelessWidget {
-  const ScanPreview({super.key, required this.receipt, required this.height});
+  const ScanPreview({super.key, required this.receipt, required this.height, this.onSideBySide});
   final Receipt receipt;
   final double height;
+
+  /// Když je zadané, zobrazí se tlačítko „Na výšku okna“ (sken vedle údajů).
+  final VoidCallback? onSideBySide;
 
   @override
   Widget build(BuildContext context) {
@@ -71,17 +74,131 @@ class ScanPreview extends StatelessWidget {
             Positioned(
               right: 12,
               bottom: 12,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                    backgroundColor: cs.inverseSurface, foregroundColor: cs.onInverseSurface),
-                onPressed: () => openScanViewer(context, receipt),
-                icon: const Icon(Icons.zoom_out_map),
-                label: const Text('Zobrazit sken'),
-              ),
+              child: Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.end, children: [
+                if (onSideBySide != null)
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                        backgroundColor: cs.inverseSurface, foregroundColor: cs.onInverseSurface),
+                    onPressed: onSideBySide,
+                    icon: const Icon(Icons.vertical_split_outlined),
+                    label: const Text('Na výšku okna'),
+                  ),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                      backgroundColor: cs.inverseSurface, foregroundColor: cs.onInverseSurface),
+                  onPressed: () => openScanViewer(context, receipt),
+                  icon: const Icon(Icons.zoom_out_map),
+                  label: const Text('Zobrazit sken'),
+                ),
+              ]),
             ),
           ]),
         );
       },
+    );
+  }
+}
+
+/// Sken na celou výšku okna s ovládáním zoomu (pro režim vedle údajů na Macu).
+class ScanPanel extends StatefulWidget {
+  const ScanPanel({super.key, required this.receipt, this.onClose});
+  final Receipt receipt;
+  final VoidCallback? onClose;
+
+  @override
+  State<ScanPanel> createState() => _ScanPanelState();
+}
+
+class _ScanPanelState extends State<ScanPanel> {
+  final _pdf = PdfViewerController();
+  final _img = TransformationController();
+  bool? _isPdf;
+
+  void _zoom(double factor) {
+    if (_isPdf == true) {
+      factor > 1 ? _pdf.zoomUp() : _pdf.zoomDown();
+    } else {
+      final m = _img.value.clone();
+      final cur = m.getMaxScaleOnAxis();
+      final next = (cur * factor).clamp(0.5, 8.0);
+      final size = context.size ?? const Size(800, 800);
+      final c = Offset(size.width / 2, size.height / 2);
+      final s = next / cur;
+      m
+        ..translateByDouble(c.dx, c.dy, 0, 1)
+        ..scaleByDouble(s, s, 1, 1)
+        ..translateByDouble(-c.dx, -c.dy, 0, 1);
+      _img.value = m;
+    }
+  }
+
+  void _reset() {
+    if (_isPdf == true) {
+      _pdf.setZoom(Offset.zero, 1);
+    } else {
+      _img.value = Matrix4.identity();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.read<AppState>();
+    final cs = Theme.of(context).colorScheme;
+    final r = widget.receipt;
+    return Container(
+      color: cs.surfaceContainerHighest,
+      child: Column(children: [
+        Material(
+          color: cs.surfaceContainerLow,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(children: [
+              const SizedBox(width: 8),
+              Text('Sken', style: Theme.of(context).textTheme.titleSmall),
+              const Spacer(),
+              IconButton(tooltip: 'Zmenšit', onPressed: () => _zoom(1 / 1.25), icon: const Icon(Icons.remove)),
+              IconButton(tooltip: 'Přizpůsobit', onPressed: _reset, icon: const Icon(Icons.fit_screen_outlined)),
+              IconButton(tooltip: 'Zvětšit', onPressed: () => _zoom(1.25), icon: const Icon(Icons.add)),
+              IconButton(
+                tooltip: 'Otevřít na Google Disku',
+                onPressed: () =>
+                    launchUrl(Uri.parse(r.scanLink), mode: LaunchMode.externalApplication),
+                icon: const Icon(Icons.open_in_new),
+              ),
+              if (widget.onClose != null)
+                IconButton(tooltip: 'Zavřít', onPressed: widget.onClose, icon: const Icon(Icons.close)),
+            ]),
+          ),
+        ),
+        Expanded(
+          child: r.fileId.isEmpty
+              ? Center(child: Text('K dokladu není připojený sken.',
+                  style: TextStyle(color: cs.onSurfaceVariant)))
+              : FutureBuilder<Uint8List>(
+                  future: s.scanBytes(r.fileId),
+                  builder: (context, snap) {
+                    if (snap.hasError) {
+                      return Center(child: Text('Sken se nepodařilo načíst: ${snap.error}'));
+                    }
+                    if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                    final bytes = snap.data!;
+                    _isPdf = isPdfBytes(bytes);
+                    if (_isPdf!) {
+                      return PdfViewer.data(bytes,
+                          sourceName: 'panel-${r.fileId}', controller: _pdf);
+                    }
+                    return InteractiveViewer(
+                      transformationController: _img,
+                      minScale: 0.5,
+                      maxScale: 8,
+                      child: SizedBox.expand(
+                        child: Image.memory(bytes, fit: BoxFit.contain),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ]),
     );
   }
 }

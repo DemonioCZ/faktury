@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../models.dart';
 import 'detail_page.dart';
+import 'edit_page.dart';
+import 'scan_view.dart';
 import 'import_page.dart';
 import 'overview_page.dart';
 import 'settings_page.dart';
@@ -19,6 +21,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _tab = 0;
   Receipt? _selected;
+  bool _sideBySide = false;
 
   @override
   Widget build(BuildContext context) {
@@ -84,12 +87,34 @@ class _HomePageState extends State<HomePage> {
               ? Center(
                   child: Text('Vyberte doklad ze seznamu',
                       style: TextStyle(color: cs.onSurfaceVariant)))
-              : ReceiptDetail(
-                  key: ValueKey(_selected!.row),
-                  receipt: _selected!,
-                  wide: true,
-                  onDeleted: () => setState(() => _selected = null),
-                ),
+              : _sideBySide
+                  ? Row(children: [
+                      SizedBox(
+                        width: 460,
+                        child: EditPage(
+                          key: ValueKey('edit-${_selected!.row}'),
+                          receipt: _selected!.copy(),
+                          title: 'Kontrola údajů',
+                          onSaved: () => ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Uloženo'))),
+                        ),
+                      ),
+                      VerticalDivider(width: 1, color: cs.outlineVariant),
+                      Expanded(
+                        child: ScanPanel(
+                          key: ValueKey('panel-${_selected!.fileId}'),
+                          receipt: _selected!,
+                          onClose: () => setState(() => _sideBySide = false),
+                        ),
+                      ),
+                    ])
+                  : ReceiptDetail(
+                      key: ValueKey(_selected!.row),
+                      receipt: _selected!,
+                      wide: true,
+                      onDeleted: () => setState(() => _selected = null),
+                      onSideBySide: () => setState(() => _sideBySide = true),
+                    ),
         ),
       ]);
     }
