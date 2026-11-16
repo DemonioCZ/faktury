@@ -58,6 +58,9 @@ class GeminiService {
   GeminiService(this.apiKey, {this.model = defaultModel});
 
   static const defaultModel = 'gemini-3.8-flash';
+
+  /// Nejstarší verze modelu, která se nabízí ve výběru.
+  static const minModelVersion = 3.0;
   final String apiKey;
   final String model;
 
@@ -229,16 +232,19 @@ ${fileName.isNotEmpty ? 'Název souboru (může napovědět): $fileName' : ''}
     }
     final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
     const skip = ['embedding', 'tts', 'image', 'live', 'audio', 'aqa', 'robotics', 'computer-use'];
+    double ver(String n) =>
+        double.tryParse(RegExp(r'gemini-(\d+(\.\d+)?)').firstMatch(n)?.group(1) ?? '') ?? 0;
     final out = <GeminiModel>[];
     for (final m in (data['models'] as List? ?? [])) {
       final name = (m['name'] as String? ?? '').replaceFirst('models/', '');
       final methods = (m['supportedGenerationMethods'] as List?)?.cast<String>() ?? const [];
       if (!name.startsWith('gemini-') || !methods.contains('generateContent')) continue;
       if (skip.any(name.contains)) continue;
+      // Jen modely verze 3 a novější (starší Google postupně ukončuje).
+      if (ver(name) < minModelVersion) continue;
       out.add(GeminiModel(name, (m['displayName'] as String?) ?? name));
     }
     // Novější verze nahoru, flash modely před pro.
-    double ver(String n) => double.tryParse(RegExp(r'gemini-(\d+(\.\d+)?)').firstMatch(n)?.group(1) ?? '') ?? 0;
     out.sort((a, b) {
       final v = ver(b.name).compareTo(ver(a.name));
       if (v != 0) return v;
