@@ -83,6 +83,18 @@ class Updater {
     }
   }
 
+  /// Smaže instalační balíčky stažené dřívějšími aktualizacemi (Android).
+  /// Volá se při startu, kdy už je nová verze nainstalovaná.
+  Future<void> cleanup() async {
+    if (!Platform.isAndroid) return;
+    try {
+      final dir = await getTemporaryDirectory();
+      await for (final f in dir.list()) {
+        if (f is File && f.path.toLowerCase().endsWith('.apk')) await f.delete();
+      }
+    } catch (_) {}
+  }
+
   bool _isNewer(String a, String b) {
     List<int> p(String v) =>
         v.split(RegExp(r'[.+]')).take(3).map((e) => int.tryParse(e) ?? 0).toList();

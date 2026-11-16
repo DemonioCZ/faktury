@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import 'app_state.dart';
 import 'services/settings.dart';
+import 'services/updater.dart';
 import 'ui/home.dart';
 import 'ui/setup_pages.dart';
 
@@ -15,6 +16,7 @@ Future<void> main() async {
   final state = AppState(settings);
   runApp(ChangeNotifierProvider.value(value: state, child: const FakturyApp()));
   state.init();
+  Updater().cleanup();
 }
 
 const seed = Color(0xFF1F6F5C);
