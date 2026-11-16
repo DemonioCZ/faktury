@@ -9,7 +9,7 @@ import '../models.dart';
 class GeminiService {
   GeminiService(this.apiKey, {this.model = defaultModel});
 
-  static const defaultModel = 'gemini-2.5-flash';
+  static const defaultModel = 'gemini-3.8-flash';
   final String apiKey;
   final String model;
 

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
+import '../services/gemini.dart';
 import '../services/updater.dart';
 import 'setup_pages.dart';
 import 'widgets.dart';
@@ -128,7 +129,7 @@ class _SettingsPageState extends State<SettingsPage> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           child: TextField(
             controller: _model,
-            decoration: const InputDecoration(labelText: 'Model', helperText: 'Výchozí gemini-2.5-flash'),
+            decoration: InputDecoration(labelText: 'Model', helperText: 'Výchozí ${GeminiService.defaultModel}. Když Google model ukončí, napište sem nový.'),
             onChanged: (v) => st.settings.geminiModel = v,
           ),
         ),

@@ -23,7 +23,12 @@ class Settings {
   String get geminiKey => _p.getString('geminiKey') ?? '';
   set geminiKey(String v) => _p.setString('geminiKey', v.trim());
 
-  String get geminiModel => _p.getString('geminiModel') ?? GeminiService.defaultModel;
+  String get geminiModel {
+    final m = _p.getString('geminiModel');
+    // Starý výchozí model Google ukončil, uložená hodnota se nahradí novým výchozím.
+    if (m == null || m.isEmpty || m == 'gemini-2.5-flash') return GeminiService.defaultModel;
+    return m;
+  }
   set geminiModel(String v) =>
       _p.setString('geminiModel', v.trim().isEmpty ? GeminiService.defaultModel : v.trim());
 
