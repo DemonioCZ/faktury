@@ -1,8 +1,16 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Podpisový klíč pro release: v GitHub Actions se vytvoří ze secrets
+// (android/key.properties + android/app/release.p12). Lokálně se použije debug klíč.
+val keyProps = Properties()
+val keyFile = rootProject.file("key.properties")
+if (keyFile.exists()) keyFile.inputStream().use { keyProps.load(it) }
 
 android {
     namespace = "cz.demonio.faktury"
@@ -28,12 +36,6 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
-
-    // Podpisový klíč pro release: v GitHub Actions se vytvoří ze secrets
-    // (android/key.properties + android/app/release.jks). Lokálně se použije debug klíč.
-    val keyProps = java.util.Properties()
-    val keyFile = rootProject.file("key.properties")
-    if (keyFile.exists()) keyFile.inputStream().use { keyProps.load(it) }
 
     signingConfigs {
         if (keyFile.exists()) {
