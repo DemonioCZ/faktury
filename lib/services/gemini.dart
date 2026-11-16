@@ -26,7 +26,7 @@ Z přiloženého dokladu vyčti údaje a vrať je jako JSON podle schématu.
 - seller: obchod nebo prodejce (krátce, např. "Alza.cz", "Datart").
 - date: datum nákupu / uskutečnění zdanitelného plnění ve formátu YYYY-MM-DD.
 - price: celková částka k úhradě v Kč jako číslo.
-- category: vyber nejvhodnější z: ${categories.join(', ')}. Pokud žádná nesedí, navrhni novou krátkou kategorii.
+- category: vyber nejvhodnější z: ${categories.join(', ')}. Pokud doklad jasně patří do víc kategorií, uveď je oddělené čárkou. Pokud žádná nesedí, navrhni novou krátkou kategorii.
 - warranty_months: délka záruky v měsících, pokud je na dokladu uvedena (např. prodloužená 36). Jinak 24.
 - doc_number: číslo faktury / dokladu.
 - note: krátká poznámka, jen pokud je něco důležitého (sériové číslo, prodloužená záruka, splátky). Jinak prázdné.

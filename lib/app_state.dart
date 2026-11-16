@@ -137,7 +137,7 @@ class AppState extends ChangeNotifier {
     final t = today;
     return receipts.where((r) {
       if (year != null && r.date?.year != year) return false;
-      if (category != null && r.category != category) return false;
+      if (category != null && !r.hasCategory(category!)) return false;
       switch (warranty) {
         case WarrantyFilter.all:
           break;
@@ -181,9 +181,11 @@ class AppState extends ChangeNotifier {
   Future<bool> save(Receipt r) async {
     var ok = false;
     await _run(() async {
-      if (r.category.isNotEmpty && !categories.contains(r.category)) {
-        await google.addCategory(settings.sheetId, r.category);
-        categories = [...categories, r.category];
+      for (final c in r.categoryList) {
+        if (!categories.contains(c)) {
+          await google.addCategory(settings.sheetId, c);
+          categories = [...categories, c];
+        }
       }
       if (r.row == null) {
         r.row = await google.appendReceipt(settings.sheetId, r);

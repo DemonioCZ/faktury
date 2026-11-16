@@ -33,6 +33,14 @@ void main() {
     expect(r.row, 5);
   });
 
+  test('více kategorií', () {
+    final r = Receipt(product: 'x', category: 'Elektronika, Děti');
+    expect(r.categoryList, ['Elektronika', 'Děti']);
+    expect(r.hasCategory('Děti'), isTrue);
+    r.categoryList = [...r.categoryList, 'Auto'];
+    expect(r.category, 'Elektronika, Děti, Auto');
+  });
+
   test('hledání bez diakritiky', () {
     final r = Receipt(product: 'Sendvičovač Tefal', seller: 'Datart');
     expect(r.matches('sendvicovac'), isTrue);

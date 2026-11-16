@@ -31,8 +31,11 @@ class OverviewPage extends StatelessWidget {
     final scoped = s.receipts.where((r) => yearFilter == null || r.date?.year == yearFilter);
     final byCat = <String, num>{};
     for (final r in scoped) {
-      final c = r.category.isEmpty ? 'Bez kategorie' : r.category;
-      byCat[c] = (byCat[c] ?? 0) + (r.price ?? 0);
+      // Doklad s více kategoriemi se započítá do každé z nich.
+      final list = r.categoryList.isEmpty ? ['Bez kategorie'] : r.categoryList;
+      for (final c in list) {
+        byCat[c] = (byCat[c] ?? 0) + (r.price ?? 0);
+      }
     }
     final cats = byCat.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
     final maxCat = cats.fold<num>(1, (a, e) => e.value > a ? e.value : a);

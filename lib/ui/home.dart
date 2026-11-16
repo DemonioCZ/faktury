@@ -443,7 +443,7 @@ class Sidebar extends StatelessWidget {
             item(c,
                 on: s.category == c,
                 dot: dots[i % dots.length],
-                count: s.countWhere((r) => r.category == c),
+                count: s.countWhere((r) => r.hasCategory(c)),
                 onTap: () => s.setCategory(c)),
         ],
         const SizedBox(height: 16),

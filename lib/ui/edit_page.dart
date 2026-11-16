@@ -76,7 +76,7 @@ class _EditPageState extends State<EditPage> {
     final n = name?.trim() ?? '';
     if (n.isEmpty || !mounted) return;
     await context.read<AppState>().addCategory(n);
-    setState(() => r.category = n);
+    setState(() => r.categoryList = [...r.categoryList, if (!r.hasCategory(n)) n]);
   }
 
   Future<void> _save() async {
@@ -102,7 +102,7 @@ class _EditPageState extends State<EditPage> {
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     final cs = Theme.of(context).colorScheme;
-    final cats = {...s.categories, if (r.category.isNotEmpty) r.category}.toList();
+    final cats = {...s.categories, ...r.categoryList}.toList();
     final ai = r.filledBy == 'AI';
 
     InputDecoration deco(String label) => InputDecoration(
@@ -160,25 +160,27 @@ class _EditPageState extends State<EditPage> {
             ),
           ]),
           const SizedBox(height: 12),
-          Row(children: [
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                key: ValueKey(r.category),
-                initialValue: r.category.isEmpty ? null : r.category,
-                decoration: const InputDecoration(labelText: 'Kategorie'),
-                items: [
-                  for (final c in cats) DropdownMenuItem(value: c, child: Text(c)),
-                ],
-                onChanged: (v) => setState(() => r.category = v ?? ''),
+          InputDecorator(
+            decoration: const InputDecoration(
+                labelText: 'Kategorie (lze vybrat víc)', filled: false),
+            child: Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final c in cats)
+                FilterChip(
+                  label: Text(c),
+                  selected: r.hasCategory(c),
+                  onSelected: (on) => setState(() {
+                    final l = r.categoryList;
+                    on ? l.add(c) : l.remove(c);
+                    r.categoryList = l;
+                  }),
+                ),
+              ActionChip(
+                avatar: const Icon(Icons.add, size: 18),
+                label: const Text('Nová'),
+                onPressed: _newCategory,
               ),
-            ),
-            const SizedBox(width: 8),
-            IconButton.filledTonal(
-              tooltip: 'Přidat novou kategorii',
-              onPressed: _newCategory,
-              icon: const Icon(Icons.add),
-            ),
-          ]),
+            ]),
+          ),
           const SizedBox(height: 12),
           Row(children: [
             Expanded(child: TextFormField(controller: _doc, decoration: deco('Číslo dokladu'))),

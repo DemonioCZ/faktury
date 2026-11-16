@@ -42,6 +42,13 @@ class Receipt {
   String fileId;
   String filledBy;
 
+  /// Kategorie dokladu – v tabulce jsou oddělené čárkou („Elektronika, Děti“).
+  List<String> get categoryList => [
+        for (final c in category.split(',')) if (c.trim().isNotEmpty) c.trim(),
+      ];
+  set categoryList(List<String> v) => category = v.join(', ');
+  bool hasCategory(String c) => categoryList.contains(c);
+
   DateTime? get warrantyEnd {
     final d = date;
     if (d == null) return null;
