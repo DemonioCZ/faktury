@@ -37,6 +37,12 @@ android {
         versionName = flutter.versionName
     }
 
+    // Lint u release sestavení padá na chybě v detektoru jednoho z pluginů.
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
+
     signingConfigs {
         if (keyFile.exists()) {
             create("release") {
