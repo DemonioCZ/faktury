@@ -105,7 +105,6 @@ class GeminiService {
 Jsi asistent pro evidenci nákupních dokladů (faktur, účtenek, dodacích listů) v češtině.
 Z přiloženého dokladu vyčti údaje a vrať je jako JSON podle schématu.
 - product: stručný a výstižný název koupené věci česky (značka + model), u více položek hlavní položku a „+ …“.
-- file_label: obecné pojmenování koupené věci česky, malými písmeny, jedno nebo dvě slova, bez značky a modelu (např. vrtačka, kartáček, pračka, zimní pneumatiky). U více položek pojmenuj hlavní položku.
 - seller: obchod nebo prodejce (krátce, např. "Alza.cz", "Datart").
 - date: datum nákupu / uskutečnění zdanitelného plnění ve formátu YYYY-MM-DD.
 - price: celková částka k úhradě v Kč jako číslo.
@@ -133,7 +132,6 @@ ${fileName.isNotEmpty ? 'Název souboru (může napovědět): $fileName' : ''}
           'type': 'OBJECT',
           'properties': {
             'product': {'type': 'STRING'},
-            'file_label': {'type': 'STRING'},
             'seller': {'type': 'STRING'},
             'date': {'type': 'STRING'},
             'price': {'type': 'NUMBER'},
@@ -142,7 +140,7 @@ ${fileName.isNotEmpty ? 'Název souboru (může napovědět): $fileName' : ''}
             'doc_number': {'type': 'STRING'},
             'note': {'type': 'STRING'},
           },
-          'required': ['product', 'file_label', 'seller', 'date', 'price', 'category'],
+          'required': ['product', 'seller', 'date', 'price', 'category'],
         },
       },
     };
@@ -221,7 +219,6 @@ ${fileName.isNotEmpty ? 'Název souboru (může napovědět): $fileName' : ''}
       docNumber: (j['doc_number'] as String? ?? '').trim(),
       note: (j['note'] as String? ?? '').trim(),
       filledBy: 'AI',
-      fileLabel: (j['file_label'] as String? ?? '').trim(),
     );
   }
 
