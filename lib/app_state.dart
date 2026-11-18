@@ -190,6 +190,7 @@ class AppState extends ChangeNotifier {
       if (r.row == null) {
         r.row = await google.appendReceipt(settings.sheetId, r);
         receipts.add(r);
+        await _renameScan(r);
       } else {
         await google.updateReceipt(settings.sheetId, r);
         final i = receipts.indexWhere((x) => x.row == r.row);
@@ -200,6 +201,20 @@ class AppState extends ChangeNotifier {
       ok = true;
     });
     return ok;
+  }
+
+  /// Sjednotí název skenu na "rok-název" (rok mohl uživatel při kontrole opravit).
+  /// Nepovedené přejmenování nesmí zmařit uložení dokladu.
+  Future<void> _renameScan(Receipt r) async {
+    if (r.fileId.isEmpty || r.fileName.isEmpty) return;
+    final target = r.targetFileName(today);
+    if (target == r.fileName) return;
+    try {
+      await google.rename(r.fileId, target);
+      r.fileName = target;
+    } catch (e) {
+      debugPrint('Sken se nepodařilo přejmenovat: $e');
+    }
   }
 
   Future<void> delete(Receipt r) async {
@@ -278,6 +293,7 @@ class AppState extends ChangeNotifier {
       onStatus: (s) => onProgress?.call(TaskProgress(2, 2, 'Čtu údaje pomocí Gemini ($model)', detail: s)),
     );
     r.fileId = f.id;
+    r.fileName = f.name;
     r.folder = f.folderName;
     r.scanUrl = 'https://drive.google.com/file/d/${f.id}/view';
     return r;
@@ -299,10 +315,10 @@ class AppState extends ChangeNotifier {
       onStatus: (s) => onProgress?.call(TaskProgress(1, 2, 'Čtu údaje pomocí Gemini ($model)', detail: s)),
     );
     cancel?.check();
-    final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : 'jpg';
-    final y = (r.date ?? today).year;
-    final safe = r.product.replaceAll(RegExp(r'[\/:*?"<>|]'), ' ').trim();
-    final name = '$y - ${safe.isEmpty ? 'doklad' : safe}.$ext';
+    final ext = fileExtension(fileName);
+    r.fileName = 'sken.${ext.isEmpty ? 'jpg' : ext}';
+    final name = r.targetFileName(today);
+    r.fileName = name;
     final kb = (bytes.length / 1024).round();
     onProgress?.call(TaskProgress(2, 2, 'Nahrávám sken na Disk', detail: '$kb kB', value: 0));
     final id = await google.upload(

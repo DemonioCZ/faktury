@@ -46,4 +46,25 @@ void main() {
     expect(r.matches('sendvicovac'), isTrue);
     expect(r.matches('alza'), isFalse);
   });
+
+  test('název skenu rok-název', () {
+    expect(scanFileName(2026, 'Vrtačka', 'pdf'), '2026-vrtačka.pdf');
+    expect(scanFileName(2025, ' zimní  pneumatiky ', 'jpg'), '2025-zimní pneumatiky.jpg');
+    expect(scanFileName(2025, r'a/b\c', 'jpg'), '2025-a b c.jpg');
+    expect(scanFileName(2025, '', 'jpg'), '2025-doklad.jpg');
+    expect(scanFileName(2025, 'kartáček', ''), '2025-kartáček');
+  });
+
+  test('cílový název podle roku nákupu', () {
+    final r = Receipt(
+      product: 'Bosch GSR 12V',
+      date: DateTime(2024, 3, 1),
+      fileLabel: 'vrtačka',
+      fileName: '2026-vrtačka.JPG',
+    );
+    expect(r.targetFileName(today), '2024-vrtačka.jpg');
+    r.fileLabel = '';
+    expect(r.targetFileName(today), '2024-bosch gsr 12v.jpg');
+    expect(r.copy().fileName, '2026-vrtačka.JPG');
+  });
 }

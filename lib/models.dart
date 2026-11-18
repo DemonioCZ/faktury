@@ -10,6 +10,25 @@ const int warrantySoonDays = 30;
 
 enum WarrantyState { active, endingSoon, expired, unknown }
 
+/// Název skenu na Disku: "rok-název", např. "2026-vrtačka.pdf".
+String scanFileName(int year, String label, String ext) {
+  var n = label
+      .toLowerCase()
+      .replaceAll(RegExp(r'[\\/:*?"<>|]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (n.length > 60) n = n.substring(0, 60);
+  n = n.replaceAll(RegExp(r'^[.\- ]+|[.\- ]+$'), '');
+  if (n.isEmpty) n = 'doklad';
+  return ext.isEmpty ? '$year-$n' : '$year-$n.$ext';
+}
+
+/// Přípona souboru malými písmeny, bez tečky. Když žádná není, vrátí ''.
+String fileExtension(String name) {
+  final i = name.lastIndexOf('.');
+  return i > 0 && i < name.length - 1 ? name.substring(i + 1).toLowerCase() : '';
+}
+
 class Receipt {
   Receipt({
     this.row,
@@ -25,6 +44,8 @@ class Receipt {
     this.folder = '',
     this.fileId = '',
     this.filledBy = '',
+    this.fileLabel = '',
+    this.fileName = '',
   });
 
   /// Číslo řádku v tabulce (1 = hlavička). Null = ještě neuložený doklad.
@@ -41,6 +62,16 @@ class Receipt {
   String folder;
   String fileId;
   String filledBy;
+
+  /// Obecný název věci pro název souboru („vrtačka“). Jen při importu, v tabulce není.
+  String fileLabel;
+
+  /// Aktuální název skenu na Disku. Jen při importu, v tabulce není.
+  String fileName;
+
+  /// Název, který má mít sken podle roku nákupu a názvu věci.
+  String targetFileName(DateTime today) => scanFileName((date ?? today).year,
+      fileLabel.isEmpty ? product : fileLabel, fileExtension(fileName));
 
   /// Kategorie dokladu – v tabulce jsou oddělené čárkou („Elektronika, Děti“).
   List<String> get categoryList => [
@@ -110,6 +141,8 @@ class Receipt {
         folder: folder,
         fileId: fileId,
         filledBy: filledBy,
+        fileLabel: fileLabel,
+        fileName: fileName,
       );
 
   // ---- serializace pro Google Sheets ----
