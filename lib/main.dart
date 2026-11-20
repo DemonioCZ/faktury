@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
@@ -11,6 +12,9 @@ import 'ui/setup_pages.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Aplikace kreslí až k okraji displeje, systémová lišta dole je průhledná
+  // a obsah se odsazuje, aby do ní nezajížděl.
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   await initializeDateFormatting('cs');
   final settings = await Settings.load();
   final state = AppState(settings);
@@ -60,6 +64,18 @@ class FakturyApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       home: const _Root(),
+      builder: (context, child) {
+        final dark = Theme.of(context).brightness == Brightness.dark;
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: SystemUiOverlayStyle(
+            systemNavigationBarColor: Colors.transparent,
+            systemNavigationBarDividerColor: Colors.transparent,
+            systemNavigationBarContrastEnforced: false,
+            systemNavigationBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+          ),
+          child: child!,
+        );
+      },
     );
   }
 }

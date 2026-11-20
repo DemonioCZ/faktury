@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
+import 'category_icons.dart';
 import 'models.dart';
 import 'services/gemini.dart';
 import 'services/google.dart';
@@ -23,6 +24,22 @@ class AppState extends ChangeNotifier {
 
   List<Receipt> receipts = [];
   List<String> categories = [...defaultCategories];
+
+  /// Ikony vybrané uživatelem (název kategorie -> klíč ikony). Chybějící se odhadnou podle názvu.
+  Map<String, String> categoryIcons = {};
+
+  String categoryIconKey(String category) {
+    final k = categoryIcons[category] ?? '';
+    return categoryIconSet.containsKey(k) ? k : guessCategoryIcon(category);
+  }
+
+  IconData categoryIcon(String category) => categoryIconData(categoryIconKey(category));
+
+  /// Ikona dokladu = ikona jeho první kategorie.
+  IconData receiptIcon(Receipt r) {
+    final c = r.categoryList;
+    return c.isEmpty ? defaultCategoryIcon : categoryIcon(c.first);
+  }
 
   // ---- filtry ----
   String query = '';
@@ -81,8 +98,9 @@ class AppState extends ChangeNotifier {
       google.readCategories(id),
     ]);
     receipts = res[0] as List<Receipt>;
-    final cats = res[1] as List<String>;
-    categories = cats.isEmpty ? [...defaultCategories] : cats;
+    final cats = res[1] as List<(String, String)>;
+    categories = cats.isEmpty ? [...defaultCategories] : [for (final c in cats) c.$1];
+    categoryIcons = {for (final c in cats) if (c.$2.isNotEmpty) c.$1: c.$2};
     _sort();
     lastSync = DateTime.now();
     _saveCache();
@@ -110,6 +128,7 @@ class AppState extends ChangeNotifier {
     settings.cache = jsonEncode({
       'receipts': receipts.map((r) => r.toJson()).toList(),
       'categories': categories,
+      'categoryIcons': categoryIcons,
       'sync': lastSync?.toIso8601String(),
     });
   }
@@ -123,6 +142,7 @@ class AppState extends ChangeNotifier {
         for (final r in j['receipts'] as List) Receipt.fromJson(r as Map<String, dynamic>)
       ];
       categories = (j['categories'] as List).cast<String>();
+      categoryIcons = ((j['categoryIcons'] as Map?) ?? {}).cast<String, String>();
       lastSync = DateTime.tryParse(j['sync'] as String? ?? '');
     } catch (_) {}
   }
@@ -210,12 +230,21 @@ class AppState extends ChangeNotifier {
     });
   }
 
-  Future<void> addCategory(String name) async {
+  Future<void> addCategory(String name, {String icon = ''}) async {
     final n = name.trim();
     if (n.isEmpty || categories.contains(n)) return;
     await _run(() async {
-      await google.addCategory(settings.sheetId, n);
+      await google.addCategory(settings.sheetId, n, icon: icon);
       categories = [...categories, n];
+      if (icon.isNotEmpty) categoryIcons = {...categoryIcons, n: icon};
+      _saveCache();
+    });
+  }
+
+  Future<void> setCategoryIcon(String name, String icon) async {
+    await _run(() async {
+      await google.setCategoryIcon(settings.sheetId, name, icon);
+      categoryIcons = {...categoryIcons, name: icon};
       _saveCache();
     });
   }

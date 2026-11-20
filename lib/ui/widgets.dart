@@ -1,7 +1,128 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
+import '../app_state.dart';
+import '../category_icons.dart';
 import '../models.dart';
+
+/// Odsazení obsahu, aby nezajížděl pod systémovou lištu Androidu (tlačítka / gesta).
+EdgeInsets withBottomInset(BuildContext context, EdgeInsets p) =>
+    p.copyWith(bottom: p.bottom + MediaQuery.viewPaddingOf(context).bottom);
+
+/// Čtvereček s ikonou kategorie dokladu (v seznamu Doklady).
+class CategoryIconBox extends StatelessWidget {
+  const CategoryIconBox({super.key, required this.icon, this.size = 44});
+  final IconData icon;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: cs.secondaryContainer,
+        borderRadius: BorderRadius.circular(size * 0.28),
+      ),
+      child: Icon(icon, size: size * 0.52, color: cs.onSecondaryContainer),
+    );
+  }
+}
+
+/// Mřížka ikon ze sady. Vrátí klíč vybrané ikony.
+Future<String?> pickCategoryIcon(BuildContext context, {String? current, String? title}) =>
+    showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(title ?? 'Ikona kategorie'),
+        contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        content: SizedBox(width: 360, child: _IconGrid(current: current, onPick: (k) => Navigator.pop(c, k))),
+        actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Zrušit'))],
+      ),
+    );
+
+class _IconGrid extends StatelessWidget {
+  const _IconGrid({required this.current, required this.onPick});
+  final String? current;
+  final ValueChanged<String> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SingleChildScrollView(
+      child: Wrap(spacing: 6, runSpacing: 6, children: [
+        for (final e in categoryIconSet.entries)
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => onPick(e.key),
+            child: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: e.key == current ? cs.primaryContainer : cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(12),
+                border: e.key == current ? Border.all(color: cs.primary, width: 2) : null,
+              ),
+              child: Icon(e.value,
+                  color: e.key == current ? cs.onPrimaryContainer : cs.onSurfaceVariant),
+            ),
+          ),
+      ]),
+    );
+  }
+}
+
+/// Dialog pro novou kategorii: název a ikona. Kategorii rovnou přidá a vrátí její název.
+Future<String?> newCategoryDialog(BuildContext context) async {
+  final ctrl = TextEditingController();
+  String icon = '';
+  final name = await showDialog<String>(
+    context: context,
+    builder: (c) => StatefulBuilder(
+      builder: (c, setState) {
+        final key = icon.isNotEmpty ? icon : guessCategoryIcon(ctrl.text);
+        return AlertDialog(
+          title: const Text('Nová kategorie'),
+          content: SizedBox(
+            width: 360,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  hintText: 'např. Zahrada, Nářadí',
+                  prefixIcon: Icon(categoryIconData(key)),
+                ),
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (v) => Navigator.pop(c, v),
+              ),
+              const SizedBox(height: 14),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Ikona', style: Theme.of(c).textTheme.labelLarge),
+              ),
+              const SizedBox(height: 8),
+              Flexible(child: _IconGrid(current: key, onPick: (k) => setState(() => icon = k))),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c), child: const Text('Zrušit')),
+            FilledButton(onPressed: () => Navigator.pop(c, ctrl.text), child: const Text('Přidat')),
+          ],
+        );
+      },
+    ),
+  );
+  final n = name?.trim() ?? '';
+  if (n.isEmpty || !context.mounted) return null;
+  await context
+      .read<AppState>()
+      .addCategory(n, icon: icon.isNotEmpty ? icon : guessCategoryIcon(n));
+  return n;
+}
 
 final _money = NumberFormat.decimalPattern('cs');
 String money(num? v) => v == null ? '–' : '${_money.format(v.round())} Kč';
@@ -151,7 +272,8 @@ class ReceiptTile extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.all(dense ? 10 : 14),
           child: Row(children: [
-            ScanThumb(size: dense ? 34 : 44, isPdf: false),
+            CategoryIconBox(
+                icon: context.watch<AppState>().receiptIcon(r), size: dense ? 34 : 44),
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

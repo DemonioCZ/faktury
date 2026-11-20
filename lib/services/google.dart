@@ -331,29 +331,52 @@ class GoogleService {
     return out;
   }
 
-  Future<List<String>> readCategories(String sheetId) async {
+  /// Kategorie a jejich ikony (list Kategorie: A = název, B = klíč ikony, může chybět).
+  Future<List<(String, String)>> readCategories(String sheetId) async {
     try {
       final res = await _sheets.spreadsheets.values
-          .get(sheetId, '$categoriesTab!A2:A');
+          .get(sheetId, '$categoriesTab!A2:B');
       return [
         for (final r in res.values ?? <List<Object?>>[])
           if (r.isNotEmpty && r.first.toString().trim().isNotEmpty)
-            r.first.toString().trim(),
+            (r.first.toString().trim(), r.length > 1 ? r[1].toString().trim() : ''),
       ];
     } catch (_) {
-      return [...defaultCategories];
+      return [for (final c in defaultCategories) (c, '')];
     }
   }
 
-  Future<void> addCategory(String sheetId, String name) async {
+  Future<void> addCategory(String sheetId, String name, {String icon = ''}) async {
     await _sheets.spreadsheets.values.append(
       sheets.ValueRange(values: [
-        [name]
+        [name, icon]
       ]),
       sheetId,
-      '$categoriesTab!A:A',
+      '$categoriesTab!A:B',
       valueInputOption: 'RAW',
       insertDataOption: 'INSERT_ROWS',
+    );
+  }
+
+  /// Uloží ikonu kategorie do sloupce B na jejím řádku.
+  Future<void> setCategoryIcon(String sheetId, String name, String icon) async {
+    final res = await _sheets.spreadsheets.values.get(sheetId, '$categoriesTab!A:A');
+    final rows = res.values ?? <List<Object?>>[];
+    final i = rows.indexWhere((r) => r.isNotEmpty && r.first.toString().trim() == name);
+    if (i < 0) {
+      await addCategory(sheetId, name, icon: icon);
+      return;
+    }
+    await _sheets.spreadsheets.values.batchUpdate(
+      sheets.BatchUpdateValuesRequest(valueInputOption: 'RAW', data: [
+        sheets.ValueRange(range: '$categoriesTab!B1', values: [
+          ['Ikona']
+        ]),
+        sheets.ValueRange(range: '$categoriesTab!B${i + 1}', values: [
+          [icon]
+        ]),
+      ]),
+      sheetId,
     );
   }
 

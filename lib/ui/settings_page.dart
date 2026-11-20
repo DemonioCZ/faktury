@@ -30,19 +30,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _newCategory() async {
-    final ctrl = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Nová kategorie'),
-        content: TextField(controller: ctrl, autofocus: true),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Zrušit')),
-          FilledButton(onPressed: () => Navigator.pop(c, ctrl.text), child: const Text('Přidat')),
-        ],
-      ),
-    );
-    if (name != null) await s.addCategory(name);
+    await newCategoryDialog(context);
   }
 
   @override
@@ -65,7 +53,7 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Column(children: children),
         );
 
-    return ListView(padding: const EdgeInsets.all(16), children: [
+    return ListView(padding: withBottomInset(context, const EdgeInsets.all(16)), children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(4, 0, 4, 0),
         child: Text('Nastavení',
@@ -168,7 +156,17 @@ class _SettingsPageState extends State<SettingsPage> {
         Padding(
           padding: const EdgeInsets.all(12),
           child: Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final c in st.categories) Chip(label: Text(c)),
+            for (final c in st.categories)
+              ActionChip(
+                avatar: Icon(st.categoryIcon(c), size: 18),
+                label: Text(c),
+                tooltip: 'Změnit ikonu',
+                onPressed: () async {
+                  final k = await pickCategoryIcon(context,
+                      current: st.categoryIconKey(c), title: 'Ikona: $c');
+                  if (k != null) await st.setCategoryIcon(c, k);
+                },
+              ),
             ActionChip(
               avatar: const Icon(Icons.add, size: 18),
               label: const Text('Přidat'),

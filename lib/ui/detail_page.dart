@@ -159,7 +159,7 @@ class ReceiptDetail extends StatelessWidget {
     ]);
 
     if (wide) {
-      return ListView(padding: const EdgeInsets.all(28), children: [
+      return ListView(padding: withBottomInset(context, const EdgeInsets.all(28)), children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Expanded(child: header),
           actions,
@@ -175,7 +175,9 @@ class ReceiptDetail extends StatelessWidget {
         ]),
       ]);
     }
-    return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 32), children: [
+    return ListView(
+        padding: withBottomInset(context, const EdgeInsets.fromLTRB(16, 0, 16, 32)),
+        children: [
       scanCard,
       const SizedBox(height: 16),
       header,

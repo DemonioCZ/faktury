@@ -55,27 +55,8 @@ class _EditPageState extends State<EditPage> {
   }
 
   Future<void> _newCategory() async {
-    final ctrl = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Nová kategorie'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(hintText: 'např. Zahrada, Nářadí'),
-          onSubmitted: (v) => Navigator.pop(c, v),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Zrušit')),
-          FilledButton(onPressed: () => Navigator.pop(c, ctrl.text), child: const Text('Přidat')),
-        ],
-      ),
-    );
-    final n = name?.trim() ?? '';
-    if (n.isEmpty || !mounted) return;
-    await context.read<AppState>().addCategory(n);
+    final n = await newCategoryDialog(context);
+    if (n == null || !mounted) return;
     setState(() => r.categoryList = [...r.categoryList, if (!r.hasCategory(n)) n]);
   }
 
@@ -121,7 +102,7 @@ class _EditPageState extends State<EditPage> {
       appBar: AppBar(title: Text(widget.title)),
       body: Form(
         key: _form,
-        child: ListView(padding: const EdgeInsets.all(16), children: [
+        child: ListView(padding: withBottomInset(context, const EdgeInsets.all(16)), children: [
           if (r.scanLink.isNotEmpty)
             Align(
               alignment: Alignment.centerLeft,
@@ -166,6 +147,7 @@ class _EditPageState extends State<EditPage> {
             child: Wrap(spacing: 8, runSpacing: 8, children: [
               for (final c in cats)
                 FilterChip(
+                  avatar: Icon(s.categoryIcon(c), size: 18),
                   label: Text(c),
                   selected: r.hasCategory(c),
                   onSelected: (on) => setState(() {

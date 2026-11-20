@@ -357,7 +357,8 @@ class Sidebar extends StatelessWidget {
     final s = context.watch<AppState>();
     final cs = Theme.of(context).colorScheme;
     final t = DateTime.now();
-    Widget item(String label, {int? count, bool on = false, VoidCallback? onTap, Color? dot}) {
+    Widget item(String label,
+        {int? count, bool on = false, VoidCallback? onTap, Color? dot, IconData? icon}) {
       return Material(
         color: on ? cs.secondaryContainer : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
@@ -367,7 +368,10 @@ class Sidebar extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             child: Row(children: [
-              if (dot != null) ...[
+              if (icon != null) ...[
+                Icon(icon, size: 16, color: dot ?? cs.onSurfaceVariant),
+                const SizedBox(width: 8),
+              ] else if (dot != null) ...[
                 Container(
                     width: 8,
                     height: 8,
@@ -443,6 +447,7 @@ class Sidebar extends StatelessWidget {
             item(c,
                 on: s.category == c,
                 dot: dots[i % dots.length],
+                icon: s.categoryIcon(c),
                 count: s.countWhere((r) => r.hasCategory(c)),
                 onTap: () => s.setCategory(c)),
         ],
