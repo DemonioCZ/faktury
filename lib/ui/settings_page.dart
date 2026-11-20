@@ -199,6 +199,7 @@ class _UpdateBannerState extends State<UpdateBanner> {
   UpdateInfo? _info;
   bool _checked = false;
   double? _progress;
+  String? _status;
   String? _error;
 
   @override
@@ -228,13 +229,22 @@ class _UpdateBannerState extends State<UpdateBanner> {
   }
 
   Future<void> _install() async {
-    setState(() => _progress = 0);
+    setState(() {
+      _progress = 0;
+      _error = null;
+    });
     try {
-      await _u.install(_info!, (p) => mounted ? setState(() => _progress = p) : null);
+      await _u.install(_info!, (p) => mounted ? setState(() => _progress = p) : null,
+          onStatus: (s) => mounted ? setState(() => _status = s) : null);
     } catch (e) {
       if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
-      if (mounted) setState(() => _progress = null);
+      if (mounted) {
+        setState(() {
+          _progress = null;
+          _status = null;
+        });
+      }
     }
   }
 
@@ -272,9 +282,17 @@ class _UpdateBannerState extends State<UpdateBanner> {
                 style: TextStyle(fontSize: 12.5, color: cs.onPrimaryContainer)),
           ),
         const SizedBox(height: 10),
-        if (_progress != null)
-          LinearProgressIndicator(value: _progress == 0 ? null : _progress)
-        else
+        if (_progress != null) ...[
+          LinearProgressIndicator(value: _progress == 0 ? null : _progress),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              _status ??
+                  'Stahuji${_progress! > 0 ? ' ${(_progress! * 100).round()} %' : '…'}',
+              style: TextStyle(fontSize: 12, color: cs.onPrimaryContainer),
+            ),
+          ),
+        ] else
           FilledButton(onPressed: _install, child: const Text('Aktualizovat')),
         if (_error != null)
           Padding(

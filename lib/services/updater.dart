@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -50,28 +53,27 @@ class Updater {
   }
 
   /// Stáhne instalační balíček a otevře ho (Android instalátor / DMG na Macu).
-  Future<void> install(UpdateInfo info, void Function(double) onProgress) async {
+  ///
+  /// Displej se během stahování nevypíná. Když se spojení přeruší (např. uživatel
+  /// zhasne displej a Android aplikaci odpojí od sítě), stahování po návratu
+  /// do aplikace pokračuje tam, kde skončilo.
+  Future<void> install(UpdateInfo info, void Function(double) onProgress,
+      {void Function(String?)? onStatus}) async {
     final url = info.assetUrl;
     if (url == null) throw Exception('K této verzi chybí instalační soubor.');
     final dir = Platform.isMacOS
         ? (await getDownloadsDirectory() ?? await getTemporaryDirectory())
         : await getTemporaryDirectory();
     final file = File('${dir.path}/${info.assetName}');
-    final client = http.Client();
+    await _keepScreenOn(true);
     try {
-      final resp = await client.send(http.Request('GET', Uri.parse(url)));
-      final total = resp.contentLength ?? 0;
-      var done = 0;
-      final sink = file.openWrite();
-      await for (final chunk in resp.stream) {
-        sink.add(chunk);
-        done += chunk.length;
-        if (total > 0) onProgress(done / total);
-      }
-      await sink.close();
+      await _download(url, file, onProgress, onStatus);
     } finally {
-      client.close();
+      await _keepScreenOn(false);
     }
+    onStatus?.call(null);
+    // Instalátor jde otevřít jen z popředí.
+    await _waitForForeground();
     if (Platform.isMacOS) {
       await Process.run('open', [file.path]);
     } else {
@@ -81,6 +83,75 @@ class Updater {
         throw Exception('Instalaci se nepodařilo spustit: ${r.message}');
       }
     }
+  }
+
+  static const _maxRetries = 8;
+
+  Future<void> _download(String url, File file, void Function(double) onProgress,
+      void Function(String?)? onStatus) async {
+    var sink = file.openWrite();
+    var done = 0, total = 0;
+    try {
+      for (var attempt = 0;; attempt++) {
+        final client = http.Client();
+        try {
+          final req = http.Request('GET', Uri.parse(url));
+          if (done > 0) req.headers['Range'] = 'bytes=$done-';
+          final resp = await client.send(req).timeout(const Duration(seconds: 30));
+          if (resp.statusCode != 200 && resp.statusCode != 206) {
+            throw HttpException('Server vrátil ${resp.statusCode}');
+          }
+          if (done > 0 && resp.statusCode == 200) {
+            // Server navázání nepodporuje, stahuje se znovu od začátku.
+            await sink.close();
+            sink = file.openWrite();
+            done = 0;
+            total = 0;
+          }
+          if (total == 0) total = done + (resp.contentLength ?? 0);
+          onStatus?.call(null);
+          // Když 30 s nepřijdou žádná data, spojení se bere jako přerušené.
+          await for (final chunk in resp.stream.timeout(const Duration(seconds: 30))) {
+            sink.add(chunk);
+            done += chunk.length;
+            if (total > 0) onProgress(done / total);
+          }
+          if (total > 0 && done < total) throw const HttpException('Stahování skončilo předčasně');
+          break;
+        } catch (e) {
+          if (attempt >= _maxRetries) {
+            throw Exception('Stahování se nepodařilo dokončit ani po ${_maxRetries + 1} pokusech. '
+                'Zkontrolujte připojení a zkuste to znovu. ($e)');
+          }
+          onStatus?.call('Spojení se přerušilo, stahování bude pokračovat…');
+          await sink.flush();
+          await _waitForForeground();
+          await Future.delayed(Duration(seconds: attempt < 2 ? 1 : 3));
+        } finally {
+          client.close();
+        }
+      }
+    } finally {
+      await sink.close();
+    }
+  }
+
+  Future<void> _keepScreenOn(bool on) async {
+    try {
+      on ? await WakelockPlus.enable() : await WakelockPlus.disable();
+    } catch (_) {}
+  }
+
+  /// Počká, až bude aplikace znovu v popředí (displej rozsvícený, aplikace otevřená).
+  static Future<void> _waitForForeground() async {
+    final state = WidgetsBinding.instance.lifecycleState;
+    if (state == null || state == AppLifecycleState.resumed) return;
+    final c = Completer<void>();
+    final l = AppLifecycleListener(onResume: () {
+      if (!c.isCompleted) c.complete();
+    });
+    await c.future;
+    l.dispose();
   }
 
   /// Smaže instalační balíčky stažené dřívějšími aktualizacemi (Android).
