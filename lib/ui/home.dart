@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import '../category_icons.dart';
 import '../models.dart';
 import 'detail_page.dart';
 import 'edit_page.dart';
@@ -401,10 +402,7 @@ class Sidebar extends StatelessWidget {
                   color: cs.onSurfaceVariant)),
         );
 
-    const dots = [
-      Color(0xFF3D6FB4), Color(0xFFB4541E), Color(0xFF1F8F6C), Color(0xFF8A5BA8),
-      Color(0xFFC0912B), Color(0xFFC0506A), Color(0xFF4F9AA8), Color(0xFF7D7A73),
-    ];
+    final brightness = Theme.of(context).brightness;
 
     return Container(
       color: cs.surfaceContainerHighest.withValues(alpha: .5),
@@ -443,10 +441,10 @@ class Sidebar extends StatelessWidget {
                 onTap: () => s.setYear(y)),
           head('Kategorie'),
           item('Všechny kategorie', on: s.category == null, onTap: () => s.setCategory(null)),
-          for (final (i, c) in s.categories.indexed)
+          for (final c in s.categories)
             item(c,
                 on: s.category == c,
-                dot: dots[i % dots.length],
+                dot: categoryColors(c, brightness).$2,
                 icon: s.categoryIcon(c),
                 count: s.countWhere((r) => r.hasCategory(c)),
                 onTap: () => s.setCategory(c)),

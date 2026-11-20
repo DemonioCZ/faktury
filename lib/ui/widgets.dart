@@ -12,21 +12,27 @@ EdgeInsets withBottomInset(BuildContext context, EdgeInsets p) =>
 
 /// Čtvereček s ikonou kategorie dokladu (v seznamu Doklady).
 class CategoryIconBox extends StatelessWidget {
-  const CategoryIconBox({super.key, required this.icon, this.size = 44});
+  const CategoryIconBox({super.key, required this.icon, required this.category, this.size = 44});
   final IconData icon;
+
+  /// Podle názvu kategorie se volí barva pozadí ('' = neutrální).
+  final String category;
   final double size;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final (bg, fg) = category.isEmpty
+        ? (cs.surfaceContainerHighest, cs.onSurfaceVariant)
+        : categoryColors(category, Theme.of(context).brightness);
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: cs.secondaryContainer,
+        color: bg,
         borderRadius: BorderRadius.circular(size * 0.28),
       ),
-      child: Icon(icon, size: size * 0.52, color: cs.onSecondaryContainer),
+      child: Icon(icon, size: size * 0.52, color: fg),
     );
   }
 }
@@ -273,7 +279,9 @@ class ReceiptTile extends StatelessWidget {
           padding: EdgeInsets.all(dense ? 10 : 14),
           child: Row(children: [
             CategoryIconBox(
-                icon: context.watch<AppState>().receiptIcon(r), size: dense ? 34 : 44),
+                icon: context.watch<AppState>().receiptIcon(r),
+                category: r.categoryList.firstOrNull ?? '',
+                size: dense ? 34 : 44),
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

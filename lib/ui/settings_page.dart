@@ -158,7 +158,7 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Wrap(spacing: 8, runSpacing: 8, children: [
             for (final c in st.categories)
               ActionChip(
-                avatar: Icon(st.categoryIcon(c), size: 18),
+                avatar: CategoryIconBox(icon: st.categoryIcon(c), category: c, size: 22),
                 label: Text(c),
                 tooltip: 'Změnit ikonu',
                 onPressed: () async {

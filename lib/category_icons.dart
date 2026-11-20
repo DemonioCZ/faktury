@@ -102,3 +102,22 @@ String guessCategoryIcon(String category) {
 }
 
 IconData categoryIconData(String key) => categoryIconSet[key] ?? defaultCategoryIcon;
+
+/// Náhodný, ale pro daný název vždy stejný odstín 0..360 (stejný na telefonu i Macu).
+double categoryHue(String category) {
+  var h = 0x811c9dc5; // FNV-1a
+  for (final c in category.trim().toLowerCase().codeUnits) {
+    h = ((h ^ c) * 0x01000193) & 0xFFFFFFFF;
+  }
+  return (h % 360).toDouble();
+}
+
+/// Barvy ikony kategorie: (pozadí, ikona) podle světlého/tmavého režimu.
+(Color, Color) categoryColors(String category, Brightness b) {
+  final hue = categoryHue(category);
+  final dark = b == Brightness.dark;
+  return (
+    HSLColor.fromAHSL(1, hue, dark ? 0.35 : 0.55, dark ? 0.27 : 0.86).toColor(),
+    HSLColor.fromAHSL(1, hue, dark ? 0.60 : 0.55, dark ? 0.82 : 0.30).toColor(),
+  );
+}
